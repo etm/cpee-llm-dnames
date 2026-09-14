@@ -1,5 +1,5 @@
 Gem::Specification.new do |s|
-  s.name             = "cpee-llm-documents_name"
+  s.name             = "cpee-llm-dnames"
   s.version          = "1.0.0"
   s.platform         = Gem::Platform::RUBY
   s.license          = "GPL-3.0-or-later"
@@ -7,11 +7,11 @@ Gem::Specification.new do |s|
 
   s.description      = "see http://cpee.org"
 
-  s.files            = Dir['{server/**/*,tools/**/*,lib/**/*}'] + %w(LICENSE Rakefile cpee-llm-documents_name.gemspec README.md AUTHORS)
+  s.files            = Dir['{server/**/*,tools/**/*,lib/**/*}'] + %w(LICENSE Rakefile cpee-llm-dnames.gemspec README.md AUTHORS)
   s.require_path     = 'lib'
   s.extra_rdoc_files = ['README.md']
   s.bindir           = 'tools'
-  s.executables      = ['cpee-llm-documents_name']
+  s.executables      = ['cpee-llm-dnames']
 
   s.required_ruby_version = '>=2.4.0'
 

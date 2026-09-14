@@ -1,7 +1,7 @@
 require 'rake'
 require 'rubygems/package_task'
 
-spec = eval(File.read('cpee-llm-documents_name.gemspec'))
+spec = eval(File.read('cpee-llm-dnames.gemspec'))
 Gem::PackageTask.new(spec) do |pkg|
   pkg.need_zip = true
   pkg.need_tar = true
@@ -13,9 +13,9 @@ end
 task :default => [:gem]
 
 task :push => :gem do |r|
-  `gem push pkg/cpee-llm-documents_name.gem`
+  `gem push pkg/cpee-llm-dnames.gem`
 end
 
 task :install => :gem do |r|
-  `gem install pkg/cpee-llm-documents_name.gem`
+  `gem install pkg/cpee-llm-dnames.gem`
 end
