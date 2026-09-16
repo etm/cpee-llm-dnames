@@ -33,7 +33,7 @@ PUT /
 
 ## Configuration
 
-`llm-dnames.conf` (YAML) sits next to the `llm-dnames` daemon script and
+The `llm-dnames.conf` (YAML) sits next to the `llm-dnames` daemon script and
 is loaded automatically on startup:
 
 ```yaml
