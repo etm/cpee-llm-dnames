@@ -17,6 +17,7 @@
 # <http://www.gnu.org/licenses/>.
 
 require 'riddl/server'
+require 'riddl/client'
 require 'json'
 
 module CPEE
@@ -25,53 +26,62 @@ module CPEE
       SERVER = File.expand_path(File.join(__dir__,'implementation.xml'))
 
       class FindDocuments < Riddl::Implementation #{{{
-        NAME_PATTERN = /\s([a-z_][a-zA-Z0-9_]*)(?=[.!?]|$)/
-        def self::resolve_document_names(user_input, documents) #{{{
-          return user_input if documents.empty?
+        SYSTEM_PROMPT = <<~PROMPT #{{{
+          You resolve references to documents inside free-form process instructions.
 
-          user_input.gsub(NAME_PATTERN) do |match|
-            word = $1
-            name = documents.keys.min_by { |n| levenshtein(word.downcase, n.downcase) }
-            if levenshtein(word.downcase, name.downcase) <= misspelling_threshold(name)
-              match.sub(word, documents[name])
-            else
-              match
-            end
-          end
-        end #}}}
-        def self::misspelling_threshold(name) #{{{
-          case name.length
-          when 0..3 then 0
-          when 4..6 then 1
-          else 2
-          end
-        end #}}}
-        def self::levenshtein(a, b) #{{{
-          costs = (0..b.length).to_a
-          a.each_char.with_index(1) do |ca, i|
-            nw = costs[0]
-            costs[0] = i
-            b.each_char.with_index(1) do |cb, j|
-              cur = costs[j]
-              costs[j] = ca == cb ? nw : [nw, costs[j], costs[j - 1]].min + 1
-              nw = cur
-            end
-          end
-          costs[b.length]
-        end #}}}
+          You will be given a JSON object mapping known document names to their
+          URLs, followed by a user instruction. The instruction may refer to one
+          or more of those documents by name, using any natural phrasing, for
+          example: an exact or slightly misspelled name on its own, "the X
+          document", "a document named X", "a document called X", "a document
+          identified by the name X", or similar constructions.
+
+          Task: return the user instruction verbatim, except that every phrase
+          referring to one of the known documents by name is replaced with that
+          document's URL taken from the mapping. Keep all surrounding wording
+          (e.g. "document", "named", "called", punctuation) untouched -- replace
+          only the name itself. Do not resolve or invent references to documents
+          that are not in the mapping, and do not alter any other part of the
+          text.
+
+          Output only the resulting text: no explanation, no quotes, no
+          markdown or code fences.
+        PROMPT
+        #}}}
 
         def response
-          user_input = @p.find { |p| p.name == 'user_input' }.value.read
-          llm        = @p.find { |p| p.name == 'llm' }.value.read
-          documents  = JSON.parse(@p.find { |p| p.name == 'documents' }.value.read)
+          user_input    = @p.find { |p| p.name == 'user_input' }.value.read
+          llm           = @p.find { |p| p.name == 'llm' }.value.read
+          documents_raw = @p.find { |p| p.name == 'documents' }.value.read
+          documents     = JSON.parse(documents_raw)
 
-          resolved_input = self.class.resolve_document_names(user_input, documents)
+          return Riddl::Parameter::Complex.new('response', 'text/plain', user_input) if documents.empty?
 
-          Riddl::Parameter::Complex.new('response', 'text/plain', resolved_input)
+          system_prompt = "#{SYSTEM_PROMPT}\nKnown documents:\n#{documents_raw}"
+
+          status, res = Riddl::Client.new(@a[0][:generic_endpoint]).post([
+            Riddl::Parameter::Complex.new('llm', 'text/plain', llm),
+            Riddl::Parameter::Complex.new('user_input', 'text/plain', user_input),
+            Riddl::Parameter::Complex.new('system_prompt', 'text/plain', system_prompt),
+            Riddl::Parameter::Complex.new('format', 'text/plain', 'false')
+          ])
+
+          raw = res.first.value
+          raw = raw.read if raw.respond_to?(:read)
+          result = JSON.parse(raw)
+
+          if status < 200 || status >= 300 || result['error']
+            @status = 502
+            return Riddl::Parameter::Complex.new('response', 'text/plain', (result['error'] || raw).to_s)
+          end
+
+          Riddl::Parameter::Complex.new('response', 'text/plain', result['llm_response'].to_s)
         end
       end #}}}
 
       def self::implementation(opts)
+        opts[:generic_endpoint] ||= 'http://localhost:9305/generic/'
+
         Proc.new do
           on resource do
             run FindDocuments, opts if put 'docin'
