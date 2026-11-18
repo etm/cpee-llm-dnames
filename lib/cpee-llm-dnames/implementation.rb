@@ -24,8 +24,15 @@ module CPEE
   module LLM
     module Dnames
       SERVER = File.expand_path(File.join(__dir__,'implementation.xml'))
+      USED_TOKENS_HEADER = 'CPEE-LLM-Used-Tokens' # same as cpee-llm, so the cockpit can sum up the tokens
 
       class FindDocuments < Riddl::Implementation #{{{
+        def used_tokens(tokens) # tokens used (by calling generic) as response header, e.g. "input=1234, output=222"
+          t = Array(tokens).first.to_s # nil, string, or array for repeated headers
+          @headers << Riddl::Header.new(USED_TOKENS_HEADER, "input=#{t[/input=(\d+)/,1].to_i}, output=#{t[/output=(\d+)/,1].to_i}")
+          @headers << Riddl::Header.new('Access-Control-Expose-Headers', USED_TOKENS_HEADER)
+        end
+
         SYSTEM_PROMPT = <<~PROMPT #{{{
           You resolve references to documents inside free-form process instructions.
 
@@ -55,16 +62,20 @@ module CPEE
           documents_raw = @p.find { |p| p.name == 'documents' }.value.read
           documents     = JSON.parse(documents_raw)
 
-          return Riddl::Parameter::Complex.new('response', 'text/plain', user_input) if documents.empty?
+          if documents.empty?
+            used_tokens('input=0, output=0')
+            return Riddl::Parameter::Complex.new('response', 'text/plain', user_input)
+          end
 
           system_prompt = "#{SYSTEM_PROMPT}\nKnown documents:\n#{documents_raw}"
 
-          status, res = Riddl::Client.new(@a[0][:generic_endpoint]).post([
+          status, res, rheaders = Riddl::Client.new(@a[0][:generic_endpoint]).post([
             Riddl::Parameter::Complex.new('llm', 'text/plain', llm),
             Riddl::Parameter::Complex.new('user_input', 'text/plain', user_input),
             Riddl::Parameter::Complex.new('system_prompt', 'text/plain', system_prompt),
             Riddl::Parameter::Complex.new('format', 'text/plain', 'false')
           ])
+          used_tokens((rheaders || {})['CPEE_LLM_USED_TOKENS'])
 
           raw = res.first.value
           raw = raw.read if raw.respond_to?(:read)
