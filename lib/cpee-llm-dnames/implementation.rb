@@ -24,11 +24,11 @@ module CPEE
   module LLM
     module Dnames
       SERVER = File.expand_path(File.join(__dir__,'implementation.xml'))
-      USED_TOKENS_HEADER = 'CPEE-LLM-Used-Tokens' # same as cpee-llm, so the cockpit can sum up the tokens
+      USED_TOKENS_HEADER = 'CPEE-LLM-Used-Tokens'
 
       class FindDocuments < Riddl::Implementation #{{{
-        def used_tokens(tokens) # tokens used (by calling generic) as response header, e.g. "input=1234, output=222"
-          t = Array(tokens).first.to_s # nil, string, or array for repeated headers
+        def used_tokens(tokens)
+          t = Array(tokens).first.to_s
           @headers << Riddl::Header.new(USED_TOKENS_HEADER, "input=#{t[/input=(\d+)/,1].to_i}, output=#{t[/output=(\d+)/,1].to_i}")
           @headers << Riddl::Header.new('Access-Control-Expose-Headers', USED_TOKENS_HEADER)
         end
